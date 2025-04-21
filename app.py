@@ -14,7 +14,7 @@ st.set_page_config(
 
 # Supabaseの設定
 try:
-    from supabase import create_client
+    from supabase_wrapper import create_client_without_proxy
     load_dotenv()
     
     supabase_url = os.environ.get('url') or os.environ.get('SUPABASE_URL')
@@ -28,17 +28,9 @@ try:
         except Exception as e:
             st.error(f"シークレット読み込みエラー: {str(e)}")
     
-    # Supabaseクライアントを作成（カスタムオプション）
     if supabase_url and supabase_key:
         try:
-            from supabase.lib.client_options import ClientOptions
-            options = ClientOptions(
-                schema='public',
-                headers={'X-Client-Info': 'supabase-py/2.3.1'},
-                auto_refresh_token=True,
-                persist_session=True
-            )
-            supabase = create_client(supabase_url, supabase_key, options=options)
+            supabase = create_client_without_proxy(supabase_url, supabase_key)
         except Exception as e:
             st.error(f"Supabase初期化エラー: {str(e)}")
             db_connected = False
@@ -458,4 +450,4 @@ with st.sidebar:
     if db_connected:
         st.success("✅ データベース接続: OK")
     else:
-        st.error("❌ データベース接続: エラー")                      
+        st.error("❌ データベース接続: エラー")                        
