@@ -28,10 +28,17 @@ try:
         except Exception as e:
             st.error(f"シークレット読み込みエラー: {str(e)}")
     
-    # Supabaseクライアントを作成（プロキシ設定なし）
+    # Supabaseクライアントを作成（カスタムオプション）
     if supabase_url and supabase_key:
         try:
-            supabase = create_client(supabase_url, supabase_key)
+            from supabase.lib.client_options import ClientOptions
+            options = ClientOptions(
+                schema='public',
+                headers={'X-Client-Info': 'supabase-py/2.3.1'},
+                auto_refresh_token=True,
+                persist_session=True
+            )
+            supabase = create_client(supabase_url, supabase_key, options=options)
         except Exception as e:
             st.error(f"Supabase初期化エラー: {str(e)}")
             db_connected = False
@@ -451,4 +458,4 @@ with st.sidebar:
     if db_connected:
         st.success("✅ データベース接続: OK")
     else:
-        st.error("❌ データベース接続: エラー")                    
+        st.error("❌ データベース接続: エラー")                      
