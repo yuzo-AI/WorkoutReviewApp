@@ -21,8 +21,8 @@ try:
     supabase_url = os.environ.get('url') or os.environ.get('SUPABASE_URL') or st.secrets["supabase"]["url"]
     supabase_key = os.environ.get('key') or os.environ.get('SUPABASE_KEY') or st.secrets["supabase"]["key"]
     
-    # Supabaseクライアントを作成
-    supabase = create_client(supabase_url, supabase_key)
+    # Supabaseクライアントを作成（proxyパラメータを削除）
+    supabase = create_client(supabase_url, supabase_key, options={"postgrest_client_timeout": 60})
     
     # データベース接続のテスト - 修正版
     try:
@@ -425,4 +425,4 @@ with st.sidebar:
     if db_connected:
         st.success("✅ データベース接続: OK")
     else:
-        st.error("❌ データベース接続: エラー")            
+        st.error("❌ データベース接続: エラー")              
