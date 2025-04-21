@@ -31,8 +31,6 @@ try:
     # Supabaseクライアントを作成（プロキシ設定なし）
     if supabase_url and supabase_key:
         try:
-            from postgrest.client import APIResponse
-            from postgrest.client import PostgrestClient
             supabase = create_client(supabase_url, supabase_key)
         except Exception as e:
             st.error(f"Supabase初期化エラー: {str(e)}")
@@ -453,4 +451,4 @@ with st.sidebar:
     if db_connected:
         st.success("✅ データベース接続: OK")
     else:
-        st.error("❌ データベース接続: エラー")                  
+        st.error("❌ データベース接続: エラー")                    
