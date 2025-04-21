@@ -21,13 +21,24 @@ try:
     supabase_url = os.environ.get('url') or os.environ.get('SUPABASE_URL') or st.secrets["supabase"]["url"]
     supabase_key = os.environ.get('key') or os.environ.get('SUPABASE_KEY') or st.secrets["supabase"]["key"]
     
-    # Supabaseクライアントを作成（proxyパラメータを削除）
-    supabase = create_client(supabase_url, supabase_key, options={"postgrest_client_timeout": 60})
+    # Supabaseクライアントを作成（バージョン2.3.1に対応）
+    supabase = create_client(supabase_url, supabase_key)
     
     # データベース接続のテスト - 修正版
     try:
-        response = supabase.table('training_records').select('id').limit(1).execute()
-        db_connected = True
+        try:
+            response = supabase.table('training_records').select('id').limit(1).execute()
+            if hasattr(response, 'data'):
+                db_connected = True
+            else:
+                if isinstance(response, dict) and 'data' in response:
+                    db_connected = True
+                else:
+                    db_connected = False
+                    st.error(f"予期しないレスポンス形式: {type(response)}")
+        except AttributeError as attr_error:
+            db_connected = False
+            st.error(f"属性エラー: {str(attr_error)}")
     except Exception as conn_error:
         db_connected = False
         st.error(f"テーブル接続エラー: {str(conn_error)}")
@@ -425,4 +436,4 @@ with st.sidebar:
     if db_connected:
         st.success("✅ データベース接続: OK")
     else:
-        st.error("❌ データベース接続: エラー")              
+        st.error("❌ データベース接続: エラー")                
