@@ -17,12 +17,29 @@ try:
     from supabase import create_client
     load_dotenv()
     
-    # 環境変数がある場合はそれを使用、ない場合はStreamlit secretsを使用
-    supabase_url = os.environ.get('url') or os.environ.get('SUPABASE_URL') or st.secrets["supabase"]["url"]
-    supabase_key = os.environ.get('key') or os.environ.get('SUPABASE_KEY') or st.secrets["supabase"]["key"]
+    supabase_url = os.environ.get('url') or os.environ.get('SUPABASE_URL')
+    supabase_key = os.environ.get('key') or os.environ.get('SUPABASE_KEY')
     
-    # Supabaseクライアントを作成（バージョン2.3.1に対応）
-    supabase = create_client(supabase_url, supabase_key)
+    # 環境変数がない場合はStreamlit secretsを使用
+    if not supabase_url or not supabase_key:
+        try:
+            supabase_url = st.secrets["supabase"]["url"]
+            supabase_key = st.secrets["supabase"]["key"]
+        except Exception as e:
+            st.error(f"シークレット読み込みエラー: {str(e)}")
+    
+    # Supabaseクライアントを作成（プロキシ設定なし）
+    if supabase_url and supabase_key:
+        try:
+            from postgrest.client import APIResponse
+            from postgrest.client import PostgrestClient
+            supabase = create_client(supabase_url, supabase_key)
+        except Exception as e:
+            st.error(f"Supabase初期化エラー: {str(e)}")
+            db_connected = False
+    else:
+        st.error("Supabase URL または Key が設定されていません")
+        db_connected = False
     
     # データベース接続のテスト - 修正版
     try:
@@ -436,4 +453,4 @@ with st.sidebar:
     if db_connected:
         st.success("✅ データベース接続: OK")
     else:
-        st.error("❌ データベース接続: エラー")                
+        st.error("❌ データベース接続: エラー")                  
