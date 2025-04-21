@@ -14,7 +14,7 @@ st.set_page_config(
 
 # Supabaseの設定
 try:
-    from supabase_wrapper import create_client_without_proxy
+    from supabase import create_client
     load_dotenv()
     
     supabase_url = os.environ.get('url') or os.environ.get('SUPABASE_URL')
@@ -30,7 +30,7 @@ try:
     
     if supabase_url and supabase_key:
         try:
-            supabase = create_client_without_proxy(supabase_url, supabase_key)
+            supabase = create_client(supabase_url, supabase_key)
         except Exception as e:
             st.error(f"Supabase初期化エラー: {str(e)}")
             db_connected = False
@@ -450,4 +450,4 @@ with st.sidebar:
     if db_connected:
         st.success("✅ データベース接続: OK")
     else:
-        st.error("❌ データベース接続: エラー")                        
+        st.error("❌ データベース接続: エラー")                          
