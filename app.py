@@ -18,10 +18,10 @@ try:
     load_dotenv()
     
     # 環境変数がある場合はそれを使用、ない場合はStreamlit secretsを使用
-    supabase_url = os.environ.get('SUPABASE_URL') or st.secrets["supabase"]["url"]
-    supabase_key = os.environ.get('SUPABASE_KEY') or st.secrets["supabase"]["key"]
+    supabase_url = os.environ.get('url') or os.environ.get('SUPABASE_URL') or st.secrets["supabase"]["url"]
+    supabase_key = os.environ.get('key') or os.environ.get('SUPABASE_KEY') or st.secrets["supabase"]["key"]
     
-    # 修正: シンプルな方法でクライアントを作成
+    # Supabaseクライアントを作成
     supabase = create_client(supabase_url, supabase_key)
     
     # データベース接続のテスト - 修正版
@@ -74,7 +74,7 @@ if selected_function == "トレーニング記録の入力":
             try:
                 # Supabaseにデータを保存
                 data = {
-                    "training_date": training_date.isoformat(),
+                    "training_date": str(training_date),
                     "exercise_name": exercise_name,
                     "weight": float(weight),
                     "reps": int(reps),
@@ -105,14 +105,14 @@ elif selected_function == "過去の記録 (リスト表示)":
             
             with col1:
                 # 日付範囲選択
-                date_range = st.date_input(
-                    "日付範囲",
-                    value=(
-                        datetime.now().date() - timedelta(days=30),
-                        datetime.now().date()
-                    ),
-                    max_value=datetime.now().date()
-                )
+                start_date = datetime.now().date() - timedelta(days=30)
+                end_date = datetime.now().date()
+                
+                col_start, col_end = st.columns(2)
+                with col_start:
+                    start_date = st.date_input("開始日", value=start_date, max_value=end_date)
+                with col_end:
+                    end_date = st.date_input("終了日", value=end_date)
             
             with col2:
                 # 種目名でのフィルタリング
@@ -128,9 +128,8 @@ elif selected_function == "過去の記録 (リスト表示)":
             query = supabase.table('training_records').select('*')
             
             # 日付フィルター
-            if len(date_range) == 2:
-                start_date, end_date = date_range
-                query = query.gte('training_date', start_date.isoformat()).lte('training_date', end_date.isoformat())
+            # start_dateとend_dateは既に上で定義されているので直接使用
+            query = query.gte('training_date', str(start_date)).lte('training_date', str(end_date))
             
             # 種目フィルター
             if selected_exercise != "すべての種目":
@@ -426,4 +425,4 @@ with st.sidebar:
     if db_connected:
         st.success("✅ データベース接続: OK")
     else:
-        st.error("❌ データベース接続: エラー") 
+        st.error("❌ データベース接続: エラー")            
