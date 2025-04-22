@@ -19,6 +19,8 @@ if "user_id" not in st.session_state:
     st.session_state.user_id = None
 if "user_email" not in st.session_state:
     st.session_state.user_email = None
+if "username" not in st.session_state:
+    st.session_state.username = None
 if "is_guest" not in st.session_state:
     st.session_state.is_guest = False
 
@@ -102,28 +104,95 @@ def create_sample_data():
     df = pd.DataFrame(data)
     return df
 
-def sign_up(email, password):
+def check_username_exists(username):
+    """ユーザー名が既に存在するかチェックする関数"""
     try:
+        response = supabase.table('profiles').select('username').eq('username', username).execute()
+        if hasattr(response, 'data') and len(response.data) > 0:
+            return True
+        elif isinstance(response, dict) and 'data' in response and len(response['data']) > 0:
+            return True
+        return False
+    except Exception as e:
+        st.error(f"ユーザー名チェックエラー: {str(e)}")
+        return False
+
+def sign_up(username, email, password):
+    """ユーザー登録関数 - ユーザー名、メールアドレス、パスワードを使用"""
+    try:
+        if check_username_exists(username):
+            st.error("このユーザー名は既に使用されています。別のユーザー名を選択してください。")
+            return False, None, None, None
+        
         response = supabase.auth.sign_up({
             "email": email,
-            "password": password
+            "password": password,
+            "options": {
+                "data": {
+                    "username": username
+                }
+            }
         })
         
         if hasattr(response, 'user') and response.user:
             user_id = response.user.id
-            return True, user_id, response.user.email
+            profile_data = {
+                "id": user_id,
+                "username": username,
+                "email": email
+            }
+            supabase.table('profiles').insert(profile_data).execute()
+            return True, user_id, email, username
         elif isinstance(response, dict) and 'user' in response and response['user']:
             user_id = response['user']['id']
-            return True, user_id, response['user']['email']
+            profile_data = {
+                "id": user_id,
+                "username": username,
+                "email": email
+            }
+            supabase.table('profiles').insert(profile_data).execute()
+            return True, user_id, email, username
         else:
             st.error("サインアップ中にエラーが発生しました。レスポンス形式が不正です。")
-            return False, None, None
+            return False, None, None, None
     except Exception as e:
         st.error(f"サインアップエラー: {str(e)}")
-        return False, None, None
+        return False, None, None, None
 
-def sign_in(email, password):
+def get_email_by_username(username):
+    """ユーザー名からメールアドレスを取得する関数"""
     try:
+        response = supabase.table('profiles').select('email').eq('username', username).execute()
+        if hasattr(response, 'data') and len(response.data) > 0:
+            return response.data[0]['email']
+        elif isinstance(response, dict) and 'data' in response and len(response['data']) > 0:
+            return response['data'][0]['email']
+        return None
+    except Exception as e:
+        st.error(f"メールアドレス取得エラー: {str(e)}")
+        return None
+
+def get_username_by_user_id(user_id):
+    """ユーザーIDからユーザー名を取得する関数"""
+    try:
+        response = supabase.table('profiles').select('username').eq('id', user_id).execute()
+        if hasattr(response, 'data') and len(response.data) > 0:
+            return response.data[0]['username']
+        elif isinstance(response, dict) and 'data' in response and len(response['data']) > 0:
+            return response['data'][0]['username']
+        return None
+    except Exception as e:
+        st.error(f"ユーザー名取得エラー: {str(e)}")
+        return None
+
+def sign_in(username, password):
+    """ユーザー名とパスワードでログインする関数"""
+    try:
+        email = get_email_by_username(username)
+        if not email:
+            st.error(f"ユーザー名 '{username}' が見つかりません。")
+            return False, None, None, None
+        
         response = supabase.auth.sign_in_with_password({
             "email": email,
             "password": password
@@ -131,23 +200,25 @@ def sign_in(email, password):
         
         if hasattr(response, 'user') and response.user:
             user_id = response.user.id
-            return True, user_id, response.user.email
+            return True, user_id, email, username
         elif isinstance(response, dict) and 'user' in response and response['user']:
             user_id = response['user']['id']
-            return True, user_id, response['user']['email']
+            return True, user_id, email, username
         else:
             st.error("ログイン中にエラーが発生しました。レスポンス形式が不正です。")
-            return False, None, None
+            return False, None, None, None
     except Exception as e:
         st.error(f"ログインエラー: {str(e)}")
-        return False, None, None
+        return False, None, None, None
 
 def sign_out():
+    """ログアウト関数"""
     try:
         supabase.auth.sign_out()
         st.session_state.authenticated = False
         st.session_state.user_id = None
         st.session_state.user_email = None
+        st.session_state.username = None
         st.session_state.is_guest = False
         return True
     except Exception as e:
@@ -155,10 +226,12 @@ def sign_out():
         return False
 
 def guest_login():
+    """ゲストログイン関数"""
     st.session_state.authenticated = True
     st.session_state.is_guest = True
     st.session_state.user_id = None
     st.session_state.user_email = "ゲスト"
+    st.session_state.username = "ゲスト"
     return True
 
 st.title("💪 筋トレレビューアプリ")
@@ -170,42 +243,49 @@ if not st.session_state.authenticated:
     
     with tab1:
         with st.form("login_form"):
-            login_email = st.text_input("メールアドレス", key="login_email")
+            login_username = st.text_input("ユーザー名", key="login_username")
             login_password = st.text_input("パスワード", type="password", key="login_password")
             login_submit = st.form_submit_button("ログイン")
             
             if login_submit:
-                if login_email and login_password:
-                    success, user_id, user_email = sign_in(login_email, login_password)
+                if login_username and login_password:
+                    success, user_id, user_email, username = sign_in(login_username, login_password)
                     if success:
                         st.session_state.authenticated = True
                         st.session_state.user_id = user_id
                         st.session_state.user_email = user_email
+                        st.session_state.username = username
                         st.session_state.is_guest = False
                         st.success("ログインに成功しました！")
                         st.rerun()
                 else:
-                    st.error("メールアドレスとパスワードを入力してください。")
+                    st.error("ユーザー名とパスワードを入力してください。")
     
     with tab2:
         with st.form("signup_form"):
+            signup_username = st.text_input("ユーザー名", key="signup_username", 
+                                          help="一意のユーザー名を入力してください。ログイン時に使用します。")
             signup_email = st.text_input("メールアドレス", key="signup_email")
             signup_password = st.text_input("パスワード", type="password", key="signup_password")
             signup_password_confirm = st.text_input("パスワード（確認）", type="password", key="signup_password_confirm")
             signup_submit = st.form_submit_button("登録")
             
             if signup_submit:
-                if signup_email and signup_password and signup_password_confirm:
+                if signup_username and signup_email and signup_password and signup_password_confirm:
                     if signup_password == signup_password_confirm:
                         if len(signup_password) >= 6:
-                            success, user_id, user_email = sign_up(signup_email, signup_password)
-                            if success:
-                                st.session_state.authenticated = True
-                                st.session_state.user_id = user_id
-                                st.session_state.user_email = user_email
-                                st.session_state.is_guest = False
-                                st.success("アカウントが正常に作成されました！")
-                                st.rerun()
+                            if len(signup_username) >= 3:
+                                success, user_id, user_email, username = sign_up(signup_username, signup_email, signup_password)
+                                if success:
+                                    st.session_state.authenticated = True
+                                    st.session_state.user_id = user_id
+                                    st.session_state.user_email = user_email
+                                    st.session_state.username = username
+                                    st.session_state.is_guest = False
+                                    st.success("アカウントが正常に作成されました！")
+                                    st.rerun()
+                            else:
+                                st.error("ユーザー名は3文字以上である必要があります。")
                         else:
                             st.error("パスワードは6文字以上である必要があります。")
                     else:
@@ -646,7 +726,7 @@ with st.sidebar:
         st.error("❌ データベース接続: エラー")
         
     if st.session_state.authenticated:
-        st.write(f"ログイン中: {st.session_state.user_email}")
+        st.write(f"ログイン中: {st.session_state.username}")
         if st.button("ログアウト"):
             sign_out()
-            st.rerun()                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      
+            st.rerun()                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        

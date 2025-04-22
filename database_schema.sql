@@ -12,14 +12,15 @@ CREATE TABLE training_records (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- 将来的に必要になるかもしれないユーザーテーブル（現状はMVPスコープ外）
--- CREATE TABLE users (
---     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
---     email TEXT UNIQUE NOT NULL,
---     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
---     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
--- );
+CREATE TABLE profiles (
+    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    username TEXT UNIQUE NOT NULL,
+    email TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
 
 -- インデックスの作成
 CREATE INDEX idx_training_records_date ON training_records(training_date);
-CREATE INDEX idx_training_records_exercise ON training_records(exercise_name);  
+CREATE INDEX idx_training_records_exercise ON training_records(exercise_name);
+CREATE INDEX idx_profiles_username ON profiles(username);    
