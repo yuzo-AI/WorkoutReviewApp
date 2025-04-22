@@ -4,6 +4,7 @@ import plotly.express as px
 from datetime import datetime, timedelta
 import os
 from dotenv import load_dotenv
+import json
 
 # アプリのタイトルとテーマ設定（最初のStreamlitコマンドとして配置）
 st.set_page_config(
@@ -11,6 +12,15 @@ st.set_page_config(
     page_icon="💪",
     layout="wide",
 )
+
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+if "user_id" not in st.session_state:
+    st.session_state.user_id = None
+if "user_email" not in st.session_state:
+    st.session_state.user_email = None
+if "is_guest" not in st.session_state:
+    st.session_state.is_guest = False
 
 # Supabaseの設定
 try:
@@ -60,7 +70,155 @@ except Exception as e:
     db_connected = False
     st.error(f"データベース接続エラー: {str(e)}")
 
+def create_sample_data():
+    import pandas as pd
+    from datetime import datetime, timedelta
+    import random
+    
+    exercises = ["ベンチプレス", "スクワット", "デッドリフト", "懸垂", "腕立て伏せ"]
+    data = []
+    
+    today = datetime.now().date()
+    
+    for i in range(30):
+        date = today - timedelta(days=i)
+        for exercise in exercises[:random.randint(1, 3)]:  # 1〜3種目をランダムに選択
+            if random.random() < 0.7:  # 70%の確率でデータを生成
+                weight_base = {"ベンチプレス": 60, "スクワット": 80, "デッドリフト": 100, "懸垂": 0, "腕立て伏せ": 0}
+                reps_base = {"ベンチプレス": 8, "スクワット": 8, "デッドリフト": 6, "懸垂": 10, "腕立て伏せ": 15}
+                
+                progress_factor = max(0, (30 - i) / 30 * 0.2)  # 日付が近いほど重量が増える
+                
+                data.append({
+                    "id": f"sample-{i}-{exercise}",
+                    "training_date": date,
+                    "exercise_name": exercise,
+                    "weight": round(weight_base[exercise] * (1 + progress_factor) + random.uniform(-2, 2), 1),
+                    "reps": int(reps_base[exercise] + random.randint(-2, 2)),
+                    "sets": random.randint(3, 5),
+                    "notes": "サンプルデータ"
+                })
+    
+    df = pd.DataFrame(data)
+    return df
+
+def sign_up(email, password):
+    try:
+        response = supabase.auth.sign_up({
+            "email": email,
+            "password": password
+        })
+        
+        if hasattr(response, 'user') and response.user:
+            user_id = response.user.id
+            return True, user_id, response.user.email
+        elif isinstance(response, dict) and 'user' in response and response['user']:
+            user_id = response['user']['id']
+            return True, user_id, response['user']['email']
+        else:
+            st.error("サインアップ中にエラーが発生しました。レスポンス形式が不正です。")
+            return False, None, None
+    except Exception as e:
+        st.error(f"サインアップエラー: {str(e)}")
+        return False, None, None
+
+def sign_in(email, password):
+    try:
+        response = supabase.auth.sign_in_with_password({
+            "email": email,
+            "password": password
+        })
+        
+        if hasattr(response, 'user') and response.user:
+            user_id = response.user.id
+            return True, user_id, response.user.email
+        elif isinstance(response, dict) and 'user' in response and response['user']:
+            user_id = response['user']['id']
+            return True, user_id, response['user']['email']
+        else:
+            st.error("ログイン中にエラーが発生しました。レスポンス形式が不正です。")
+            return False, None, None
+    except Exception as e:
+        st.error(f"ログインエラー: {str(e)}")
+        return False, None, None
+
+def sign_out():
+    try:
+        supabase.auth.sign_out()
+        st.session_state.authenticated = False
+        st.session_state.user_id = None
+        st.session_state.user_email = None
+        st.session_state.is_guest = False
+        return True
+    except Exception as e:
+        st.error(f"ログアウトエラー: {str(e)}")
+        return False
+
+def guest_login():
+    st.session_state.authenticated = True
+    st.session_state.is_guest = True
+    st.session_state.user_id = None
+    st.session_state.user_email = "ゲスト"
+    return True
+
 st.title("💪 筋トレレビューアプリ")
+
+if not st.session_state.authenticated:
+    st.info("続行するにはログインまたはサインアップしてください。")
+    
+    tab1, tab2 = st.tabs(["ログイン", "新規登録"])
+    
+    with tab1:
+        with st.form("login_form"):
+            login_email = st.text_input("メールアドレス", key="login_email")
+            login_password = st.text_input("パスワード", type="password", key="login_password")
+            login_submit = st.form_submit_button("ログイン")
+            
+            if login_submit:
+                if login_email and login_password:
+                    success, user_id, user_email = sign_in(login_email, login_password)
+                    if success:
+                        st.session_state.authenticated = True
+                        st.session_state.user_id = user_id
+                        st.session_state.user_email = user_email
+                        st.session_state.is_guest = False
+                        st.success("ログインに成功しました！")
+                        st.rerun()
+                else:
+                    st.error("メールアドレスとパスワードを入力してください。")
+    
+    with tab2:
+        with st.form("signup_form"):
+            signup_email = st.text_input("メールアドレス", key="signup_email")
+            signup_password = st.text_input("パスワード", type="password", key="signup_password")
+            signup_password_confirm = st.text_input("パスワード（確認）", type="password", key="signup_password_confirm")
+            signup_submit = st.form_submit_button("登録")
+            
+            if signup_submit:
+                if signup_email and signup_password and signup_password_confirm:
+                    if signup_password == signup_password_confirm:
+                        if len(signup_password) >= 6:
+                            success, user_id, user_email = sign_up(signup_email, signup_password)
+                            if success:
+                                st.session_state.authenticated = True
+                                st.session_state.user_id = user_id
+                                st.session_state.user_email = user_email
+                                st.session_state.is_guest = False
+                                st.success("アカウントが正常に作成されました！")
+                                st.rerun()
+                        else:
+                            st.error("パスワードは6文字以上である必要があります。")
+                    else:
+                        st.error("パスワードが一致しません。")
+                else:
+                    st.error("すべてのフィールドを入力してください。")
+    
+    if st.button("ゲストとして試用する"):
+        guest_login()
+        st.success("ゲストモードでログインしました。データの保存や閲覧はできません。")
+        st.rerun()
+    
+    st.stop()
 
 # サイドバーでの機能選択
 selected_function = st.sidebar.radio(
@@ -107,13 +265,20 @@ if selected_function == "トレーニング記録の入力":
                     "notes": notes
                 }
                 
-                response = supabase.table('training_records').insert(data).execute()
-                
-                if hasattr(response, 'data') and len(response.data) > 0:
-                    st.success("トレーニング記録が正常に保存されました！")
-                    st.session_state.last_saved_record = data  # セッションに保存
+                if st.session_state.is_guest:
+                    st.warning("ゲストモードではデータを保存できません。登録してログインすると、トレーニング記録を保存できます。")
+                    st.session_state.last_saved_record = data  # セッションに保存（表示用）
+                    st.success("ゲストモードでの記録をシミュレートしました。実際には保存されていません。")
                 else:
-                    st.error("データの保存に失敗しました。")
+                    data["user_id"] = st.session_state.user_id
+                    
+                    response = supabase.table('training_records').insert(data).execute()
+                    
+                    if hasattr(response, 'data') and len(response.data) > 0:
+                        st.success("トレーニング記録が正常に保存されました！")
+                        st.session_state.last_saved_record = data  # セッションに保存
+                    else:
+                        st.error("データの保存に失敗しました。")
             except Exception as e:
                 st.error(f"エラーが発生しました: {str(e)}")
         else:
@@ -152,8 +317,15 @@ elif selected_function == "過去の記録 (リスト表示)":
             # データの取得
             query = supabase.table('training_records').select('*')
             
+            if st.session_state.is_guest:
+                st.info("ゲストモードではサンプルデータのみが表示されます。実際のデータを見るには、アカウントを作成してログインしてください。")
+                dummy_data = create_sample_data()
+                st.dataframe(dummy_data, use_container_width=True)
+                st.stop()  # 以降の処理を停止
+            else:
+                query = query.eq('user_id', st.session_state.user_id)
+            
             # 日付フィルター
-            # start_dateとend_dateは既に上で定義されているので直接使用
             query = query.gte('training_date', str(start_date)).lte('training_date', str(end_date))
             
             # 種目フィルター
@@ -209,11 +381,18 @@ elif selected_function == "過去の記録 (グラフ表示)":
                 )
                 
                 # データ取得
-                response = supabase.table('training_records')\
-                    .select('*')\
-                    .eq('exercise_name', selected_exercise)\
-                    .order('training_date', desc=False)\
-                    .execute()
+                if st.session_state.is_guest:
+                    st.info("ゲストモードではサンプルデータのみが表示されます。実際のデータを見るには、アカウントを作成してログインしてください。")
+                    sample_df = create_sample_data()
+                    sample_df = sample_df[sample_df['exercise_name'] == selected_exercise]
+                    df = sample_df
+                else:
+                    response = supabase.table('training_records')\
+                        .select('*')\
+                        .eq('user_id', st.session_state.user_id)\
+                        .eq('exercise_name', selected_exercise)\
+                        .order('training_date', desc=False)\
+                        .execute()
                 
                 if hasattr(response, 'data') and len(response.data) > 0:
                     # データをDataFrameに変換
@@ -316,9 +495,17 @@ elif selected_function == "成長フィードバック":
                 # 今日の日付を取得
                 today = datetime.now().date()
                 
-                # 今日のトレーニング記録を取得
+                if st.session_state.is_guest:
+                    st.info("ゲストモードではサンプルデータのみが表示されます。実際のデータを見るには、アカウントを作成してログインしてください。")
+                    st.write("サンプルフィードバック:")
+                    st.success("🎉 ベンチプレスの重量が60kgから65kgに向上しました！")
+                    st.success("💪 スクワットの回数が8回から10回に増加しました！")
+                    st.stop()  # 以降の処理を停止
+                
+                # 今日のトレーニング記録を取得（認証済みユーザー）
                 today_response = supabase.table('training_records')\
                     .select('*')\
+                    .eq('user_id', st.session_state.user_id)\
                     .eq('training_date', today.isoformat())\
                     .execute()
                 
@@ -337,6 +524,7 @@ elif selected_function == "成長フィードバック":
                         # 前回の同じ種目の記録を取得
                         previous_response = supabase.table('training_records')\
                             .select('*')\
+                            .eq('user_id', st.session_state.user_id)\
                             .eq('exercise_name', exercise)\
                             .lt('training_date', today.isoformat())\
                             .order('training_date', desc=True)\
@@ -346,6 +534,7 @@ elif selected_function == "成長フィードバック":
                         # 自己ベスト（重量）の記録を取得
                         best_weight_response = supabase.table('training_records')\
                             .select('*')\
+                            .eq('user_id', st.session_state.user_id)\
                             .eq('exercise_name', exercise)\
                             .neq('training_date', today.isoformat())\
                             .order('weight', desc=True)\
@@ -355,6 +544,7 @@ elif selected_function == "成長フィードバック":
                         # 自己ベスト（回数）の記録を取得
                         best_reps_response = supabase.table('training_records')\
                             .select('*')\
+                            .eq('user_id', st.session_state.user_id)\
                             .eq('exercise_name', exercise)\
                             .neq('training_date', today.isoformat())\
                             .order('reps', desc=True)\
@@ -417,13 +607,16 @@ elif selected_function == "成長フィードバック":
                     st.warning("今日のトレーニング記録が見つかりません。「トレーニング記録の入力」から今日のトレーニングを記録してください。")
             
             # 最新のトレーニング日のリンクを表示
-            latest_response = supabase.table('training_records')\
-                .select('training_date')\
-                .order('training_date', desc=True)\
-                .limit(1)\
-                .execute()
+            latest_response = None
+            if not st.session_state.is_guest:
+                latest_response = supabase.table('training_records')\
+                    .select('training_date')\
+                    .eq('user_id', st.session_state.user_id)\
+                    .order('training_date', desc=True)\
+                    .limit(1)\
+                    .execute()
             
-            if hasattr(latest_response, 'data') and len(latest_response.data) > 0:
+            if latest_response and hasattr(latest_response, 'data') and len(latest_response.data) > 0:
                 latest_date = datetime.fromisoformat(latest_response.data[0]['training_date']).date()
                 st.info(f"最新のトレーニング日: {latest_date.strftime('%Y-%m-%d')}")
         
@@ -450,4 +643,10 @@ with st.sidebar:
     if db_connected:
         st.success("✅ データベース接続: OK")
     else:
-        st.error("❌ データベース接続: エラー")                          
+        st.error("❌ データベース接続: エラー")
+        
+    if st.session_state.authenticated:
+        st.write(f"ログイン中: {st.session_state.user_email}")
+        if st.button("ログアウト"):
+            sign_out()
+            st.rerun()                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      

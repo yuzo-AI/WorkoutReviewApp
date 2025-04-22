@@ -1,6 +1,8 @@
 streamlit==1.32.0
-supabase==2.3.1
+supabase==1.0.3
 pandas==2.1.4
 plotly==5.18.0
 python-dotenv==1.0.0
-matplotlib==3.8.2 
+matplotlib==3.8.2
+requests==2.31.0
+stqdm==0.0.5   
