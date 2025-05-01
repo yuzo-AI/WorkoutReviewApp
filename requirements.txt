@@ -5,4 +5,5 @@ plotly==5.18.0
 python-dotenv==1.0.0
 matplotlib==3.8.2
 requests==2.31.0
-stqdm==0.0.5   
+stqdm==0.0.5
+google-api-python-client==2.107.0   

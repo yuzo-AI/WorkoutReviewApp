@@ -41,4 +41,7 @@ Thumbs.db
 
 # Project specific
 *.log
-/data 
+/data
+
+# Environment variables and secret files
+.env-sample 
